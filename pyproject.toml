@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "fungi-ai"
+version = "2.0.0"
+description = "Adaptive Confidence-Guided Multi-Scale Vision Transformer Framework for Explainable Microscopic Fungal Species Classification"
+authors = [{ name = "Rishi Jayanath A", email = "rishi.jayanath@roboticsforyouth.org" }]
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["configs*", "datasets*", "models*", "fusion*", "trainer*", "evaluation*", "explainability*", "visualization*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

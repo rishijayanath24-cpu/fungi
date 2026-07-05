@@ -1,0 +1,33 @@
+defaults:
+  - base
+
+experiment:
+  name: "fusion_acmf"
+  tag: "contribution"
+
+# Both resolution checkpoints required
+fusion:
+  checkpoint_224: null       # set via --ckpt-224 CLI arg
+  checkpoint_384: null       # set via --ckpt-384 CLI arg
+
+  # Which strategies to evaluate (all four for the paper)
+  strategies: ["equal_weight", "accuracy_weighted", "confidence_guided", "learnable"]
+
+  # Confidence-guided (S3) settings
+  confidence_guided:
+    eps: 1.0e-8              # numerical stability in entropy computation
+
+  # Learnable fusion (S4) settings
+  learnable:
+    hidden_dim: 128
+    dropout: 0.1
+    lr: 5.0e-5
+    epochs: 20              # fine-tune only the fusion head
+    batch_size: 32
+
+training:
+  batch_size: 32
+  amp: true
+
+evaluation:
+  generate_comparison_plot: true

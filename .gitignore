@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Training outputs (large files, generated)
+outputs/
+logs/
+wandb/
+
+# Checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# Dataset downloads
+data/
+datasets/splits/*.npy
+
+# Paper outputs (generated — commit only final versions)
+paper/figures/
+paper/tables/
+paper/summaries/
+
+# Kaggle
+kaggle.json
+.kaggle/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.env

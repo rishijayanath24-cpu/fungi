@@ -1,0 +1,63 @@
+# Base configuration — all experiment configs inherit from this.
+# Override any field in a child config; do NOT hardcode paths here.
+
+project:
+  name: "fungi-ai"
+  version: "2.0.0"
+
+# Reproducibility
+seed: 42
+deterministic: true          # torch.backends.cudnn.deterministic
+
+# Dataset
+dataset:
+  name: "defungi"
+  root: null                 # set via --data-root CLI arg or env FUNGI_DATA
+  classes: ["H1", "H2", "H3", "H5", "H6"]
+  num_classes: 5
+  num_workers: 4
+  pin_memory: true
+
+# Training defaults (overridden per model)
+training:
+  epochs: 30
+  batch_size: 32
+  optimizer: "adamw"
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  grad_clip: 1.0
+  label_smoothing: 0.1
+  warmup_epochs: 5
+  amp: true                  # automatic mixed precision
+  early_stopping_patience: 10
+
+# Augmentation
+augmentation:
+  image_size: 224            # overridden per model
+  use_mixup: true
+  mixup_alpha: 0.8
+  use_cutmix: true
+  cutmix_alpha: 1.0
+  use_random_erasing: true
+  random_erasing_prob: 0.25
+
+# Logging
+logging:
+  tensorboard: true
+  log_interval: 10           # batches
+  output_dir: "outputs"
+
+# Checkpointing
+checkpoint:
+  save_dir: "outputs/checkpoints"
+  save_top_k: 3
+  monitor: "val_f1_macro"
+  mode: "max"
+
+# Evaluation
+evaluation:
+  metrics: ["accuracy", "f1_macro", "f1_per_class", "precision", "recall", "auc_macro"]
+  generate_figures: true
+  figure_dpi: 300
+  figure_dir: "paper/figures"
+  table_dir: "paper/tables"

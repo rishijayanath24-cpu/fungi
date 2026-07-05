@@ -1,0 +1,24 @@
+defaults:
+  - base
+
+experiment:
+  name: "vit_b16_224"
+  tag: "primary"
+
+model:
+  architecture: "vit"
+  backbone: "vit_base_patch16_224"
+  pretrained: true
+  image_size: 224
+  drop_rate: 0.1
+  attn_drop_rate: 0.0
+
+augmentation:
+  image_size: 224
+
+training:
+  epochs: 30
+  batch_size: 32
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  warmup_epochs: 5

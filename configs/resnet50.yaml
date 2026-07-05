@@ -1,0 +1,23 @@
+defaults:
+  - base
+
+experiment:
+  name: "resnet50"
+  tag: "baseline"
+
+model:
+  architecture: "resnet"
+  backbone: "resnet50"
+  pretrained: true
+  image_size: 224
+
+augmentation:
+  image_size: 224
+
+training:
+  epochs: 50
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  warmup_epochs: 3
+  label_smoothing: 0.1

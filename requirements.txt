@@ -1,0 +1,39 @@
+# Core
+torch>=2.5.1
+torchvision>=0.20.1
+torchaudio>=2.5.1
+
+# Model hub
+timm>=1.0.9
+
+# Data
+kagglehub>=0.3.0
+Pillow>=10.4.0
+numpy>=1.26.4
+pandas>=2.2.3
+scipy>=1.14.1
+
+# Config
+PyYAML>=6.0.2
+omegaconf>=2.3.0
+
+# Training utilities
+tqdm>=4.67.1
+tensorboard>=2.18.0
+
+# Evaluation & metrics
+scikit-learn>=1.5.2
+matplotlib>=3.9.4
+seaborn>=0.13.2
+
+# Explainability
+opencv-python>=4.10.0
+
+# Deployment
+gradio>=5.9.1
+
+# Testing
+pytest>=8.3.4
+
+# Code quality
+ruff>=0.8.4

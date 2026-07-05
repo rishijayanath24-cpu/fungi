@@ -1,0 +1,23 @@
+defaults:
+  - base
+
+experiment:
+  name: "efficientnet_b3"
+  tag: "baseline"
+
+model:
+  architecture: "efficientnet"
+  backbone: "efficientnet_b3"
+  pretrained: true
+  image_size: 300            # native EfficientNet-B3 resolution
+
+augmentation:
+  image_size: 300
+
+training:
+  epochs: 30
+  batch_size: 16
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+  warmup_epochs: 3
+  label_smoothing: 0.1

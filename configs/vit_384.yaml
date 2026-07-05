@@ -1,0 +1,25 @@
+defaults:
+  - base
+
+experiment:
+  name: "vit_b16_384"
+  tag: "high_res"
+
+model:
+  architecture: "vit"
+  backbone: "vit_base_patch16_384"
+  pretrained: true
+  image_size: 384
+  drop_rate: 0.1
+  attn_drop_rate: 0.0
+
+augmentation:
+  image_size: 384
+
+training:
+  epochs: 50
+  batch_size: 16             # reduced for 6 GB VRAM at 384px
+  lr: 5.0e-5                 # lower LR for larger resolution
+  weight_decay: 1.0e-2
+  warmup_epochs: 5
+  amp: true

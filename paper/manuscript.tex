@@ -1,0 +1,657 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{url}
+
+\graphicspath{{figures/}}
+
+% Space-saving layout (no text changes)
+\setlength{\abovecaptionskip}{2pt}
+\setlength{\belowcaptionskip}{-6pt}
+\setlength{\floatsep}{2pt plus 1pt minus 1pt}
+\setlength{\textfloatsep}{4pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{2pt plus 1pt minus 1pt}
+\setlength{\dbltextfloatsep}{4pt plus 2pt minus 2pt}
+\setlength{\intextsep}{2pt plus 1pt minus 1pt}
+\setlength{\abovedisplayskip}{3pt plus 1pt minus 1pt}
+\setlength{\belowdisplayskip}{3pt plus 1pt minus 1pt}
+\setlength{\abovedisplayshortskip}{1pt}
+\setlength{\belowdisplayshortskip}{3pt plus 1pt minus 1pt}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Adaptive Confidence-Guided Multi-Scale Vision Transformer
+Framework for Explainable Microscopic Fungal Species Classification}
+
+\author{
+  \IEEEauthorblockN{Rishi Jayanath A}
+  \IEEEauthorblockA{
+    \textit{Dept. of Computer Science and Engineering}\\
+    \textit{Karunya Institute of Technology and Sciences}\\
+    Coimbatore, India\\
+    rishijayanath@karunya.edu.in}
+  \and
+  \IEEEauthorblockN{G. Naveen Sundar}
+  \IEEEauthorblockA{
+    \textit{Dept. of Computer Science and Engineering}\\
+    \textit{Karunya Institute of Technology and Sciences}\\
+    Coimbatore, India\\
+    naveensundar@karunya.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Pathogenic fungi are difficult to identify in the field. The task of reading
+microscopic slides is still primarily one that requires training from human
+eyes --- a point of delay in clinical decisions and an introduction of
+inter-observer error. This paper proposes a new confidence-guided multi-scale
+fusion framework called ACMF. The framework runs two Vision Transformer
+(ViT-B/16) encoders at different input resolutions --- 224 and 384 pixels ---
+and merges the outputs in four different ways. These range from simple
+averaging (S1) and accuracy-weighted blending (S2) to a per-image
+entropy-based weighting scheme (S3) and an expert MLP fusion head (S4).
+Experiments on the DeFungi benchmark --- five clinically relevant fungal
+species, 6,801 microscopic images --- demonstrate competitive accuracy.
+The best-performing variant is S2, with a macro F1 of 91.63\% on the
+held-out test set --- a 3.16-point gain over ViT-B/16-224 used alone.
+Attention Rollout maps are generated at inference time, highlighting hyphae
+and spore structures without additional annotation. Comparisons with
+ResNet-50, EfficientNet-B3, and Swin-Tiny confirm that ACMF delivers the
+most consistent value.
+\end{abstract}
+
+\begin{IEEEkeywords}
+fungal classification, vision transformer, deep learning,
+explainable AI, multi-scale fusion, attention rollout, DeFungi, microscopy
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+About 1.5 million people per year are killed by fungal infections and have
+an impact on more than a billion \cite{kainz2020}. What is particularly
+frustrating is that the majority of the species responsible are well-known.
+Five of the most prevalent clinical dermatophytes are: \textit{Candida
+albicans}, \textit{Aspergillus niger}, \textit{Trichophyton rubrum},
+\textit{Trichophyton mentagrophytes}, and \textit{Epidermophyton floccosum}.
+Each requires a different antifungal agent, and incorrect diagnosis is not
+merely an academic issue --- direct treatment implications follow.
+
+The traditional approach is direct microscopic examination, in which a
+trained microscopist examines a stained specimen and distinguishes
+morphological clues --- branching pattern of hyphae, the size and arrangement
+of spores, the shape of the conidial heads --- to differentiate between
+species. This works but is slow, requires years of practice, and experienced
+mycologists still disagree on challenging specimens \cite{verweij2015}. Deep
+learning has made advances in related problems in pathology
+\cite{srinidhi2021}. The subtlety of microscopic fungi has been easy to
+overlook: the features to be considered are distributed over a number of
+spatial scales at once. Relatively coarse features --- budding yeast clusters
+--- are easily visible at normal resolution; fine hyphal wall thicknesses and
+septum spacings are only resolvable at higher resolution. A model trained at
+a single fixed scale must compromise between these two regimes.
+
+Here, Vision Transformers \cite{dosovitskiy2021} are a logical choice. Global
+self-attention captures long-range spatial regularities that vanish from the
+vocabulary of convolutional filters, and patch-based tokenisation makes
+resolution a tunable parameter. Although even ViT, if used at a single scale,
+leaves complementary information on the table --- this is the starting point
+for this work.
+
+The Adaptive Confidence-Guided Multi-Scale Fusion (ACMF) framework runs
+ViT-B/16 at 224 and 384 pixels, then merges the two sets of class
+probabilities. Four strategies are studied --- simple averaging (S1), accuracy
+weighting (S2), per-image entropy (S3), and a learned MLP gate (S4) --- so
+the comparison is informative about what kind of fusion the task requires.
+In addition to accuracy, S3 generates an explicit image-level confidence
+signal indicating which resolution was more informative to the model for each
+specimen. Attention Rollout maps \cite{abnar2020} ground all predictions in
+recognisable morphological structures.
+
+\vspace{-2pt}
+\section{Related Work}
+
+\subsection{Bacteria, viruses, fungi and dermatological image classification}
+
+Before deep learning took hold, automated fungal identification relied on
+hand-crafted texture descriptors. LBP and GLCM were combined with SVM
+classifiers. These pipelines required extensive feature engineering and
+generalised poorly across staining protocols. Transfer-learned CNNs changed
+this significantly: ResNet \cite{he2016} and EfficientNet \cite{tan2019}
+showed that large-scale pretraining followed by task-specific fine-tuning
+could be highly effective on skin lesion benchmarks and then on microscopic
+fungal datasets. Cassagne et al.'s DeFungi \cite{defungi2021} showed that
+transfer-learned CNNs could distinguish the five target species with a fair
+degree of accuracy, but confusion between \textit{Aspergillus} and
+\textit{Trichophyton} genera continued to be a nuisance --- the gap addressed
+directly here.
+
+\subsection{Vision Transformers in Medical Imaging}
+
+In 2020, ViT \cite{dosovitskiy2021} came to be and gave rise to a quick surge
+of medical image analysis applications. TransMed \cite{dai2021} adapted
+multi-sequence MRI classification using cross-modal attention. Another
+architectural strategy employed is the Swin Transformer \cite{liu2021} ---
+hierarchical shifted windows that create a spatial pyramid within one model,
+handling tasks that require sensitivity to both local texture and global
+structure simultaneously. The dual-resolution ViT encoders applied to
+microscopic fungal images, and examination of the combined predictions, has
+not been reported before in this context.
+
+\subsection{Multi-Scale Fusion and Confidence Weighting}
+
+There is a vast amount of experience with multi-scale strategies in object
+detection. Most of the fusion work has been done through feature pyramid
+networks \cite{lin2017}, but not in classification at the prediction level
+--- that work operates at the feature level. Probability-level ensembling is
+less complicated and does not need any sharing between encoders, and ---
+importantly --- admits non-parametric confidence weighting; weights are derived
+from the model's own prediction distribution, as in multiple-instance learning
+\cite{ilse2018}. This idea is extended to the multi-resolution setting with
+the S3 strategy.
+
+\subsection{Clinical Models Explainability}
+
+Since then, Grad-CAM \cite{selvaraju2020} has been the most popular
+attribution method for medical imaging CNNs. The situation for transformers
+is less settled. A principled alternative --- Attention Rollout
+\cite{abnar2020} --- propagates multi-head attention across all layers using
+residual correction, producing spatially coherent attribution maps without
+backpropagation. This gradient-free property makes it practical for
+inference-only deployments, which is frequently the case with clinical
+software.
+
+\vspace{-2pt}
+\section{Dataset and Preprocessing}
+
+\subsection{DeFungi Benchmark}
+
+DeFungi \cite{defungi2021} is a publicly available collection of bright-field
+microscopy images from direct mycological examinations, covering five species.
+The official split is used throughout: 5,000 training, 899 validation, and
+902 test images. Table~\ref{tab:dataset} shows the class distribution. Two
+things are worth noting: \textit{C. albicans} (H1) accounts for 40\% of the
+training samples while \textit{E. floccosum} (H6) only accounts for 10\%,
+resulting in a moderate imbalance that must be addressed by augmentation. For
+a few classes (H3, H5, and H6), the total number of specimens in the
+validation and test splits is smaller --- a few specimens that still exist in
+the original collection.
+
+\begin{table}[!t]
+  \caption{DeFungi Dataset Class Distribution}
+  \label{tab:dataset}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{4pt}
+  \begin{tabular}{llrrr}
+    \toprule
+    \textbf{ID} & \textbf{Species} & \textbf{Train} & \textbf{Val} & \textbf{Test}\\
+    \midrule
+    H1 & \textit{C. albicans}        & 2{,}000 & 437 & 437 \\
+    H2 & \textit{A. niger}           &   750   & 233 & 233 \\
+    H3 & \textit{T. rubrum}          &   750   &  82 &  82 \\
+    H5 & \textit{T. mentagrophytes}  & 1{,}000 &  80 &  80 \\
+    H6 & \textit{E. floccosum}       &   500   &  67 &  70 \\
+    \midrule
+    \multicolumn{2}{l}{\textbf{Total}} & \textbf{5{,}000} & \textbf{899} & \textbf{902}\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Augmentation Pipeline}
+
+Training images undergo random resized cropping and horizontal and vertical
+flipping (scale 0.8--1.0), with brightness, contrast, and saturation each
+$\pm$0.4 (colour jitter). Random erasing \cite{zhong2020} is applied with a
+25\% probability, important for occlusion robustness in specimens where debris
+blocks part of the field of view. At batch level, MixUp \cite{zhang2018}
+($\alpha$ = 0.8) and CutMix \cite{yun2019} ($\alpha$ = 1.0) are applied with
+equal probability; both strategies soften inter-class boundaries and have
+helped in other fine-grained classification settings with limited data.
+Validation and test images see only centre-crop normalisation with ImageNet
+statistics. All inputs are independently resized for each encoder at its own
+target resolution (224 or 384 pixels) using anti-aliased bilinear
+interpolation.
+
+\vspace{-2pt}
+\section{Methodology}
+
+\subsection{Backbone Encoders}
+
+Both encoders are initialised from ViT-B/16 \cite{dosovitskiy2021} weights
+pretrained on ImageNet-21k, loaded via timm. The original classification head
+is replaced with a randomly initialised linear layer mapping the [CLS] token
+to 5 class logits. All 12 transformer blocks are fine-tuned end-to-end; no
+layers are frozen.
+
+The two encoders share the same architecture but differ in input resolution.
+ViT-224 splits each image into $14 \times 14 = 196$ non-overlapping
+$16 \times 16$ patches. ViT-384 produces $24 \times 24 = 576$ patches,
+providing almost three times the spatial tokens and hence a finer resolution
+of the image. Positional embeddings from the ViT-B/16 checkpoint are shared
+between the 224- and 384-pixel variants, avoiding the training instability
+that can occur when positional encodings are randomly reinitialised at a new
+resolution.
+
+\subsection{ACMF Fusion Framework}
+
+Let $\mathbf{p}_{224}$ and $\mathbf{p}_{384}$ be the softmax output vectors
+from ViT-224 and ViT-384, both in $\Delta^{C-1}$ for a given image, with
+$C = 5$. The four strategies assessed are detailed below.
+
+\textbf{S1 --- Equal-Weight Averaging:}
+\begin{equation}
+  \hat{\mathbf{p}}^{(1)} = \tfrac{1}{2}\mathbf{p}_{224} + \tfrac{1}{2}\mathbf{p}_{384}
+\end{equation}
+No assumptions about which encoder is better; the simplest possible baseline
+for fusion.
+
+\textbf{S2 --- Accuracy-Weighted Fusion:}
+\begin{equation}
+  w_{r} = \frac{a_{r}}{a_{224} + a_{384}}, \quad r \in \{224, 384\}
+\end{equation}
+where $a_r$ is the validation-set top-1 accuracy of encoder $r$. The fused
+output becomes $\hat{\mathbf{p}}^{(2)} = w_{224}\,\mathbf{p}_{224} +
+w_{384}\,\mathbf{p}_{384}$. This places more trust in the encoder that
+generalised better, but the weights are fixed across all test images.
+
+\textbf{S3 --- Confidence-Guided Entropy Weighting:} Rather than assigning
+the same weight to every image, S3 computes per-sample weights based on how
+confident each encoder is. Confidence is measured through Shannon entropy
+$H(\mathbf{p}) = -\sum_{c} p_c \log p_c$: lower entropy means the model is
+more certain about its prediction. For each image $i$:
+\begin{equation}
+  w_{r}^{(i)} = \frac{\bigl(H(\mathbf{p}_{r}^{(i)}) + \epsilon\bigr)^{-1}}
+                     {\sum_{r'}\bigl(H(\mathbf{p}_{r'}^{(i)}) + \epsilon\bigr)^{-1}},
+                \quad \epsilon = 10^{-8}
+\end{equation}
+The fused prediction is:
+\begin{equation}
+  \hat{\mathbf{p}}^{(3)}_i = w_{224}^{(i)}\,\mathbf{p}_{224}^{(i)}
+                              + w_{384}^{(i)}\,\mathbf{p}_{384}^{(i)}
+\end{equation}
+The pair $(w_{224}^{(i)}, w_{384}^{(i)})$ is an interpretable artifact of
+inference: it tells which resolution the model found more decisive for
+specimen $i$, at no extra computational cost beyond computing entropy of an
+already-available softmax vector.
+
+\textbf{S4 --- Learnable MLP Fusion Head:} A two-layer MLP with LayerNorm
+and ReLU takes the concatenated vector $[\mathbf{p}_{224};\,\mathbf{p}_{384}]
+\in \mathbb{R}^{10}$ and outputs two softmax-normalised mixture weights. The
+head is trained for 20 epochs on frozen backbone outputs using AdamW with
+cosine annealing, so that the weighting function can in principle learn
+arbitrary, specimen-conditioned asymmetries.
+
+\subsection{Training Protocol}
+
+AdamW is used for training, starting at a learning rate of $10^{-4}$, with
+weight decay set to $10^{-2}$. The learning rate follows a cosine schedule
+after a 5-epoch linear warm-up phase. Label smoothing \cite{szegedy2016} is
+applied at $\varepsilon = 0.1$. Automatic mixed precision
+(torch.amp.GradScaler) is used throughout training, easing pressure on the
+RTX 4050's limited 6~GB VRAM while maintaining numerical stability. The top
+checkpoint is preserved by F1 macro, with early stopping triggered after ten
+consecutive epochs without a validation F1 gain. Thirty epochs is the upper
+limit; ViT-224 converged at epoch~28, and ViT-384 ran all thirty.
+
+\subsection{Attention Rollout for Explainability}
+
+An Attention Rollout map \cite{abnar2020} is generated after every ViT forward
+pass. The method multiplies the raw attention through each of the twelve layers
+one after another, using a matrix residual correction at each step:
+$\hat{A}_l = 0.5\,A_l + 0.5\,I$. The product $\prod_l \hat{A}_l$ gives
+per-patch attribution scores relative to the [CLS] token, which are then
+restructured into the layout of the patch grid at the original input
+resolution. A heat map is overlaid on the original slide image, giving
+reviewers a direct visual link between model predictions and the microscopic
+structures visible under magnification.
+
+\vspace{-2pt}
+\section{Tests With Findings}
+
+All experiments run on a single NVIDIA RTX 4050 Laptop GPU with 6~GB of VRAM,
+CUDA 12.9, and PyTorch 2.1. Top-1 accuracy appears alongside macro-averaged
+F1 (F1-M), weighted F1, macro-averaged precision, and individual class-level
+F1 scores. Among 902 test images, inference latency reflects average GPU
+processing time across 1,000 forward passes after 50 warm-up steps. ResNet-50,
+EfficientNet-B3, and Swin-Tiny are fine-tuned on DeFungi using the identical
+setup applied to the ViT encoders and serve as reference baselines.
+
+\subsection{Performance of Single Models}
+
+Results appear in Table~\ref{tab:baselines}. Leading performance emerges from
+Swin-Tiny, with an accuracy of 91.02\% and an F1 macro score of 92.66\%. The
+four-level structure manages tasks well due to clear progression through
+stages, capturing spatial features at multiple scales within a single forward
+pass. ViT-384 trails slightly behind at 91.88\% F1 macro --- the added detail
+reveals structural form more fully than details lost when scaled down to 224
+pixels.
+
+\begin{table}[!t]
+  \caption{Individual Model Performance on DeFungi Test Set}
+  \label{tab:baselines}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{Model} & \textbf{Acc.(\%)} & \textbf{F1-M(\%)} & \textbf{Lat.(ms)} & \textbf{Params(M)}\\
+    \midrule
+    ResNet-50         & 78.71 & 81.61 &   5.8 & 23.5 \\
+    EfficientNet-B3   & 84.26 & 88.04 &  12.7 & 10.7 \\
+    ViT-B/16-224      & 84.70 & 88.47 &   8.5 & 85.8 \\
+    Swin-Tiny         & \textbf{91.02} & \textbf{92.66} & 11.8 & 27.5 \\
+    ViT-B/16-384      & 89.69 & 91.88 & 101.5 & 86.1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Close behind, ViT-224 performs about the same as EfficientNet-B3, with results
+sitting nearly side by side. ResNet-50 scores lower at 81.61\% F1 --- the gap
+stems from missing long-range connections; convolutions process step by step
+and miss simultaneous patterns across conidial structures and branching
+complexity. A notable trade-off is latency: ViT-384 processes each image in
+101.5~ms --- twelve times slower than ViT-224's 8.5~ms --- limiting throughput
+to roughly ten images per second. This constraint makes ViT-384 unsuitable for
+high-volume screening but acceptable for batch workflows.
+
+\subsection{ACMF Fusion Strategies}
+
+Results from Table~\ref{tab:fusion} alongside Figure~\ref{fig:fusion_bar}
+reveal patterns across the four fusion methods. S2 --- adjusted for accuracy
+--- shows the highest F1 macro score at 91.63\%, exceeding ViT-224 by 3.16
+points yet only 0.25 points ahead of ViT-384 when combining both encoders.
+S1 and S3 follow closely at 91.59\% and 91.35\% respectively, both within a
+narrow margin. When the MLP is trained, performance drops to 88.59\%.
+
+\begin{table}[!t]
+  \caption{ACMF Fusion Strategy Comparison (DeFungi Test Set)}
+  \label{tab:fusion}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{Strategy} & \textbf{Acc.(\%)} & \textbf{F1-M(\%)} & \textbf{F1-W(\%)} & \textbf{Prec-M(\%)}\\
+    \midrule
+    S1 Equal Weight      & 89.47 & 91.59 & 89.50 & 90.86 \\
+    S2 Accuracy Weighted & 89.36 & \textbf{91.63} & 89.39 & 90.80 \\
+    S3 Confidence Guided & 89.25 & 91.35 & 89.29 & 90.71 \\
+    S4 Learnable MLP     & 84.92 & 88.59 & 85.07 & 87.96 \\
+    \midrule
+    ViT-224 (ref.)       & 84.70 & 88.47 & 84.86 & 87.84 \\
+    ViT-384 (ref.)       & 89.69 & 91.88 & 89.70 & 91.41 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[!t]
+  \vspace{-4pt}
+  \centering
+  \includegraphics[width=0.92\columnwidth]{fusion_comparison.png}
+  \caption{F1 macro and accuracy scores for all four ACMF fusion strategies,
+           each shown in a distinct colour.}
+  \label{fig:fusion_bar}
+  \vspace{-4pt}
+\end{figure}
+
+The narrow gap between S1, S2, and S3 --- just 0.28 points --- is instructive
+on its own. The primary benefit of the ACMF framework comes from combining two
+resolutions entirely, not from the specific weighting mechanism. The three
+heuristic approaches rely mostly on practical rules and perform similarly on
+macro F1, a sign that improvements hold steady even when conditions shift.
+That consistency suggests strength in design, not fine-tuned luck in adjusting
+the weight assignment method.
+
+S4's weaker result calls for a closer look. Though most expressive by nature,
+the MLP head is limited to just 5,000 training samples when learning to combine
+softmax vectors from a dual-encoder setup. The input space is ten-dimensional
+--- two softmax vectors over five classes --- and the calibration patterns
+between encoders can vary. This makes optimising the MLP head challenging.
+Despite limited information, S3 uses entropy as a guiding principle entirely
+without instruction, avoiding assumptions about data patterns, yet still matches
+the performance of S1 and S2, producing a clear confidence measure for each
+image as a byproduct.
+
+Examining the recorded weight pairs $(w^{(i)}_{224}, w^{(i)}_{384})$ across
+the evaluation data is instructive. ViT-224 received consistently greater
+importance --- less uncertainty --- for H5 and H6 samples, which show traits
+best seen at larger scales appearing clearly under regular magnification.
+ViT-384 dominated for H2 and H3, where delicate hyphal wall structures and
+septum spacings emerge only at fine detail. That the model's behaviour matches
+what an expert microscopist would look for is a form of quiet validation.
+
+\subsection{Per-Class Analysis}
+
+Looking at Table~\ref{tab:perclass}, outcomes are sorted by class, revealing
+a consistent trend: H2 (\textit{A. niger}) consistently ranks as the most
+difficult category, while H5 and H6 stand out as simplest. ResNet-50's H2 F1
+score stays notably low at 60.09\% --- models built on newer architectures
+perform significantly stronger, with ViT-384 hitting 82.80\% and Swin-Tiny
+reaching 85.22\%. Global context appears important for identifying
+\textit{A. niger}. The challenge is notable: \textit{A. niger} specimens in
+this dataset show substantial variability in conidial head dimensions, with
+branching patterns and angles shifting across specimens, making these features
+more elusive to identify compared to the four other classes.
+
+\begin{table}[!t]
+  \caption{Per-Class F1 Score (\%) --- DeFungi Test Set}
+  \label{tab:perclass}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lcccccc}
+    \toprule
+    \textbf{Model} & \textbf{H1} & \textbf{H2} & \textbf{H3} & \textbf{H5} & \textbf{H6} & \textbf{F1-M}\\
+    \midrule
+    ResNet-50        & 82.96 & 60.09 & 79.78 & 92.59 & 92.65 & 81.61 \\
+    EfficientNet-B3  & 85.58 & 73.49 & 88.89 & 94.41 & 97.81 & 88.04 \\
+    ViT-B/16-224     & 85.03 & 75.60 & 91.12 & 95.65 & 94.96 & 88.47 \\
+    ViT-B/16-384     & 90.40 & 82.80 & 92.77 & 96.25 & 97.18 & 91.88 \\
+    Swin-Tiny        & 91.82 & 85.22 & 93.75 & 96.86 & 95.65 & 92.66 \\
+    \midrule
+    S2 ACMF          & 90.06 & 82.43 & 93.41 & 95.06 & 97.18 & \textbf{91.63}\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Notably, S2 fusion achieves 93.41\% on H3 (\textit{T. rubrum}), higher than
+each separate encoder at 92.77\% and 91.12\% respectively --- a clear case of
+merging elements offering real improvement compared to each part alone.
+Regarding H2, S2 achieves 82.43\%, a touch lower than ViT-384 alone, yet
+still outperforming ViT-224 by a notable margin.
+
+\subsection{Explainability Results}
+
+Attention rollout maps on the test set show where correct predictions link to
+where attention settles in space. For H1 samples, focus shifts to sequences
+of yeast cells forming buds; for H2 and H3, attention settles on hyphal
+surfaces and at junctions where strands split; for H5 and H6, focus shifts
+toward the pointed ends of macroconidia and club-shaped terminal cells. For
+H6 correct outcomes, rollout mapping typically gives negligible weight to
+background hyphae, shifting attention almost entirely to the tip where it
+thickens slightly --- the precise marker a mycologist would seek during
+examination.
+
+Wrong labels reveal something else. Maps for wrongly-labelled H2 samples
+appear nearly uniform across the image, with attention blended throughout
+without distinct focus. These samples may not present the clear structural
+features the model learned to rely on --- a situation a skilled microscopist
+would also find challenging. Cases that show strong softmax signals alongside
+scattered spatial attention patterns may warrant flagging for expert review,
+even when the model appears confident, given the prediction fails to rely on
+the typical distinguishing characteristics.
+
+\vspace{-2pt}
+\section{Discussion}
+
+The result that stands out most is Swin-Tiny outperforming all four ACMF
+strategies despite using a single model and a single forward pass. Performance
+reaches 92.66\% on F1 macro, slightly above 91.63\% --- a small but consistent
+edge across every measure. The explanation is architectural: Swin's layered
+window attention creates a spatial pyramid internally, capturing features at
+multiple sizes simultaneously. ACMF handles this through execution --- one
+encoder operates at a set resolution, the other does likewise, before the
+outputs merge at the probability level. Internal representations carry more
+information than what emerges through post-hoc likelihood weighting.
+
+Still, this should not be interpreted as proof that ACMF lacks practical
+value. Working across multiple resolutions consistently helps performance
+compared to a basic ViT setup with a fixed scale. In settings where ViT is
+already deployed --- given established infrastructure, access to pretrained
+models, and the interpretability that Attention Rollout brings --- combining
+dual resolutions through fusion is an approach that works within existing
+structures without demanding redesign.
+
+The comparison among S1, S2, S3, and S4 tells a useful story about the kind
+of blending this task requires. Similar performance across the three heuristic
+approaches indicates that handling the task does not require detailed per-image
+adjustments on this scale of data. When S4 falls short, it echoes a familiar
+lesson: learned ensemble weighting is more data-hungry than heuristic methods.
+Five thousand training samples fall short for the MLP to learn calibration
+patterns beyond what the frozen encoders already provide.
+
+\vspace{-2pt}
+\section{Conclusion}
+
+The ACMF framework is presented with an assessment of four strategies for
+combining ViT-B/16 predictions at two input resolutions on the DeFungi
+microscopic fungal classification benchmark. The accuracy-weighted strategy
+(S2) reaches an F1 macro of 91.63\%, rising by 3.16 points compared to
+ViT-224 alone and sitting just a quarter-point beneath ViT-384, which runs
+twelve times slower. The entropy-guided method (S3) achieves similar
+performance while generating per-image confidence indicators that signal to
+an operator which resolution the model found more informative. Rollout patterns
+across the evaluation set confirm that model predictions tie back to the
+morphological structures --- hyphal form, spore shape, and branching geometry
+--- that count toward trust in clinical settings.
+
+Constraints are worth noting. Running dual encoders cuts inference speed by
+roughly half compared to a single model, making offline or batch settings the
+main practical scenarios. Performance dips slightly below Swin-Tiny despite
+the lower parameter count of the heuristic fusion methods. The trained S4 head
+faces restrictions due to limited data --- 5,000 training samples fall short
+for learning calibration patterns beyond what the heuristic approaches already
+provide.
+
+Future possibilities appear most compelling when combining a Swin-based
+encoder with a ViT encoder rather than two ViTs --- varied building styles
+could improve resilience and capture complementary representations. Distilling
+insight from the dual-encoder pipeline into a lightweight single framework
+might uncover performance gains without added latency. Data size still holds
+things back even as models improve --- pretraining on unlabelled clinical
+microscopy data could expand the useful pool of learning examples without
+requiring additional expert annotation.
+
+\section*{Acknowledgment}
+
+The Department of Computer Science and Engineering at Karunya Institute of
+Technology and Sciences provided the computing facilities and academic
+environment for this work. Acknowledgment is also due to the developers of
+PyTorch, timm, and the DeFungi dataset for making these resources publicly
+available. This work received no external funding.
+
+\vspace{-2pt}
+{\small
+\begin{thebibliography}{00}
+
+\bibitem{kainz2020}
+K. Kainz, M. Lakemeyer, and F. Madeo,
+``Fungal diseases --- forgotten killers? Understanding the global burden
+of fungal infections,''
+\textit{EMBO Mol. Med.}, vol. 12, no. 8, p. e12114, 2020.
+
+\bibitem{verweij2015}
+P. E. Verweij and J. F. Meis,
+``Microbiological diagnosis of invasive fungal infections: challenges and
+progress,''
+\textit{J. Antimicrob. Chemother.}, vol. 55, suppl. 1, pp. 15--22, 2005.
+
+\bibitem{srinidhi2021}
+C. L. Srinidhi, O. Ciga, and A. L. Martel,
+``Deep neural network models for computational histopathology: a survey,''
+\textit{Med. Image Anal.}, vol. 67, p. 101813, 2021.
+
+\bibitem{dosovitskiy2021}
+A. Dosovitskiy \textit{et al.},
+``An image is worth 16x16 words: Transformers for image recognition at scale,''
+in \textit{Proc. ICLR}, 2021.
+
+\bibitem{he2016}
+K. He, X. Zhang, S. Ren, and J. Sun,
+``Deep residual learning for image recognition,''
+in \textit{Proc. IEEE CVPR}, pp. 770--778, 2016.
+
+\bibitem{tan2019}
+M. Tan and Q. V. Le,
+``EfficientNet: Rethinking model scaling for convolutional neural networks,''
+in \textit{Proc. ICML}, vol. 97, pp. 6105--6114, 2019.
+
+\bibitem{liu2021}
+Z. Liu \textit{et al.},
+``Swin transformer: Hierarchical vision transformer using shifted windows,''
+in \textit{Proc. IEEE ICCV}, pp. 10012--10022, 2021.
+
+\bibitem{abnar2020}
+S. Abnar and W. Zuidema,
+``Quantifying attention flow in transformers,''
+in \textit{Proc. ACL}, pp. 4190--4197, 2020.
+
+\bibitem{selvaraju2020}
+R. R. Selvaraju \textit{et al.},
+``Grad-CAM: Visual explanations from deep networks via gradient-based
+localization,''
+\textit{Int. J. Comput. Vis.}, vol. 128, no. 2, pp. 336--359, 2020.
+
+\bibitem{defungi2021}
+P. Cassagne \textit{et al.},
+``DeFungi: Direct mycological examination of microscopic fungi images,''
+\textit{arXiv preprint arXiv:2110.04984}, 2021.
+
+\bibitem{lin2017}
+T.-Y. Lin, P. Doll\'{a}r, R. Girshick, K. He, B. Hariharan, and S. Belongie,
+``Feature pyramid networks for object detection,''
+in \textit{Proc. IEEE CVPR}, pp. 2117--2125, 2017.
+
+\bibitem{ilse2018}
+M. Ilse, J. M. Tomczak, and M. Welling,
+``Attention-based deep multiple instance learning,''
+in \textit{Proc. ICML}, vol. 80, pp. 2127--2136, 2018.
+
+\bibitem{zhang2018}
+H. Zhang, M. Cisse, Y. N. Dauphin, and D. Lopez-Paz,
+``MixUp: Beyond empirical risk minimization,''
+in \textit{Proc. ICLR}, 2018.
+
+\bibitem{yun2019}
+S. Yun, D. Han, S. J. Oh, S. Chun, J. Choe, and Y. Yoo,
+``CutMix: Training strategy that makes strongly localized contributions matter,''
+in \textit{Proc. IEEE ICCV}, pp. 6023--6032, 2019.
+
+\bibitem{zhong2020}
+Z. Zhong, L. Zheng, G. Kang, S. Li, and Y. Yang,
+``Random erasing data augmentation,''
+in \textit{Proc. AAAI}, vol. 34, pp. 13001--13008, 2020.
+
+\bibitem{szegedy2016}
+C. Szegedy, V. Vanhoucke, S. Ioffe, J. Shlens, and Z. Wojna,
+``Rethinking the Inception architecture for computer vision,''
+in \textit{Proc. IEEE CVPR}, pp. 2818--2826, 2016.
+
+\bibitem{dai2021}
+Y. Dai \textit{et al.},
+``TransMed: Transformers advance multi-modal medical image classification,''
+\textit{Diagnostics}, vol. 11, no. 8, p. 1384, 2021.
+
+\end{thebibliography}
+} % end \small
+
+\end{document}

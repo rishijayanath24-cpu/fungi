@@ -1,0 +1,23 @@
+defaults:
+  - base
+
+experiment:
+  name: "swin_tiny"
+  tag: "baseline"
+
+model:
+  architecture: "swin"
+  backbone: "swin_tiny_patch4_window7_224"
+  pretrained: true
+  image_size: 224
+
+augmentation:
+  image_size: 224
+
+training:
+  epochs: 50
+  batch_size: 32
+  lr: 1.0e-4
+  weight_decay: 5.0e-2
+  warmup_epochs: 5
+  label_smoothing: 0.1
