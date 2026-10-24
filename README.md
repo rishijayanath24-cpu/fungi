@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/hero-light.svg">
-  <img alt="Animated diagram of ACMF: two ViT-B/16 resolutions fused by inverse-entropy weights" src="assets/hero-dark.svg">
+  <img alt="Animated ACMF diagram: on an H5 and an H3 micrograph, inverse-entropy weights shift between 224 px and 384 px ViT-B/16 models; below, macro F1 of the fusion strategies on the DeFungi test set" src="assets/hero-dark.svg">
 </picture>
 
 **Version 2 — IEEE Conference Submission**  
